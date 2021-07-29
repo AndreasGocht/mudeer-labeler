@@ -1,8 +1,9 @@
 import QtQuick 2.12
+import QtQuick.Dialogs 1.0
 import QtQuick.Controls 2.5
+import QtQuick.Layouts 1.11
+import QtQuick.LocalStorage 2.15
 import QtMultimedia 5.15
-import Qt.labs.platform 1.1
-import Qt.labs.folderlistmodel 2.1
 
 ApplicationWindow {
     id: mainWindow
@@ -11,15 +12,35 @@ ApplicationWindow {
     visible: true
     title: qsTr("MuDeeR Labeler")
 
-    FolderDialog {
-        id: folderDialog
-        currentFolder: viewer.folder
-        folder: StandardPaths.standardLocations(StandardPaths.PicturesLocation)[0]
+
+    ListModel
+    {
+        id: listModel
+    }
+
+    FileDialog {
+        id: fileDialog
+        title: "Please choose the database"
+        folder: shortcuts.home
+
 
         onAccepted: {
-            console.log("You chose: " + folder)
-            fileModel.folder = folder
+            console.log("You chose: " + fileDialog.fileUrl + " in " + fileDialog.folder)
+            var db
+            db = LocalStorage.openDatabaseSync(fileDialog.fileUrl)
+            db.transaction(function(tx) {
+                result = tx.executeSql("SELECT * FROM files");
+                for (var i = 0; i < results.rows.length; i++) {
+                    listModel.append({
+                        file: results.rows.item(i).file,
+                        text: results.rows.item(i).text,
+                        corrected: results.rows.item(i).corrected
+                    })
+                }
+
+            })
         }
+
     }
 
     Audio {
@@ -27,45 +48,32 @@ ApplicationWindow {
     }
 
 
-    Column {
+    ColumnLayout {
         anchors.fill: parent
 
         spacing: 5
-        padding: 10
 
         Button {
             id: openButton
             text: qsTr("Open Folder")
-            onClicked: folderDialog.open()
-            width: parent.width
-            height: 50
+            onClicked: fileDialog.open()
+            Layout.fillWidth: true
+            Layout.preferredHeight: 50
         }
 
         ListView {
             id: listView
-            width: parent.width
-            height: (parent.height - openButton.height)*0.45
-            model: FolderListModel {
-                id: fileModel
-                nameFilters: ["*.wav"]
-                showDirs: false
-            }
+            Layout.fillWidth: true
+            Layout.preferredHeight: 300
+
+            model: listModel
+
             delegate: Button {
                 width: parent.width
                 height: 30
-                text: fileName
+                text: file
                 onClicked: {
-                    playMusic.source = fileUrl
-
-                    var request = new XMLHttpRequest()
-                    request.open('GET', fileUrl + ".txt")
-                    request.onreadystatechange = function(event) {
-                        if (request.readyState === XMLHttpRequest.DONE) {
-                            textEdit.text = request.responseText
-                        }
-                    }
-                    request.send()
-
+                    playMusic.source = file
                     playMusic.play()
                 }
             }
@@ -76,8 +84,8 @@ ApplicationWindow {
 
         TextEdit {
             id: textEdit
-            width: parent.width
-            height: (parent.height - openButton.height)*0.45
+            Layout.fillWidth: true
+            Layout.fillHeight: true
             text: qsTr("Text Edit")
             font.pixelSize: 12
         }
